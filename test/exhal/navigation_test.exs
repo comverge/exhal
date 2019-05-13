@@ -4,7 +4,7 @@ defmodule ExHal.NavigationTest do
   use ExUnit.Case, async: false
   use RequestStubbing
 
-  alias ExHal.{Navigation,Document,Error,ResponseHeader}
+  alias ExHal.{Navigation,Document,Error,NoSuchLinkError,ResponseHeader}
 
   test ".follow_link", %{doc: doc} do
     thing_hal = hal_str("http://example.com/thing")
@@ -20,6 +20,20 @@ defmodule ExHal.NavigationTest do
       Navigation.follow_link(doc, "embedded")
 
     assert {:ok, "http://example.com/e"} = ExHal.url(target)
+  end
+
+  test ".follow_links w/ embedded link", %{doc: doc} do
+    stub_request "get", url: "~r/http:\/\/example.com\/[12]/", resp_body: hal_str("") do
+      Navigation.follow_links(doc, "multiple")
+      |> Enum.each(fn resp ->
+        assert {:ok, target = %Document{}, %ResponseHeader{status_code: 200}} = resp
+        assert {:ok, _} = ExHal.url(target)
+      end)
+    end
+  end
+
+  test ".follow_links w/ non-existent rel", %{doc: doc} do
+    assert {:error, %ExHal.NoSuchLinkError{}} = Navigation.follow_links(doc, "absent")
   end
 
   test ".post", %{doc: doc} do
@@ -72,7 +86,7 @@ defmodule ExHal.NavigationTest do
 
     assert {:error, %Error{}} = Navigation.link_target(doc, "multiple", strict: true)
 
-    assert {:error, %Error{}} = Navigation.link_target(doc, "nonexistent")
+    assert {:error, %NoSuchLinkError{}} = Navigation.link_target(doc, "nonexistent")
   end
 
   # Background
